@@ -1,0 +1,11 @@
+data/
+models/
+build/
+
+Makefile
+
+.venv/
+env/
+__pycache__/
+
+analysis/plots/

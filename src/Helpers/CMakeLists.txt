@@ -1,0 +1,8 @@
+file(GLOB_RECURSE HELPERS_SRC CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
+file(GLOB_RECURSE HELPERS_HEADERS CONFIGURE_DEPENDS "${INCLUDE_DIR}/*.h")
+
+add_library(helper_lib SHARED
+	    ${HELPERS_HEADERS}
+	    ${HELPERS_SRC})
+
+target_include_directories(helper_lib PUBLIC ${INCLUDE_DIR})
