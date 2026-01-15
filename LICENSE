@@ -1,21 +1,21 @@
-SoarAI Internal-Use License v1.0
-Copyright (c) 2025 Severin Wagner. All rights reserved.
+MIT License
 
-Grant. You may download, install, use, and modify the Software for your own
-personal or internal (in-organization) purposes.
+Copyright (c) 2025 Severin Wagner
 
-Restrictions. You may NOT (and may not permit anyone to):
-  • publish, distribute, sublicense, or make the Software or derivative works
-    available to any third party (including posting copies or forks publicly);
-  • host the Software as a service or use it to provide services to others;
-  • remove or alter notices.
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-Ownership. The Software is licensed, not sold. All rights reserved.
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
 
-No Warranty / Limitation of Liability. Provided “AS IS” to the maximum extent
-permitted by law.
-
-Termination. If you breach these terms, your rights terminate automatically and
-you must stop using and destroy all copies.
-
-Contact. For redistribution or other rights, contact: sevywagner@gmail.com
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.

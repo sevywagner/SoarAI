@@ -9,6 +9,7 @@ packaging==25.0
 pillow==11.3.0
 pyparsing==3.2.3
 python-dateutil==2.9.0.post0
+PyYAML==6.0.3
 scikit-learn==1.7.1
 scipy==1.16.1
 six==1.17.0

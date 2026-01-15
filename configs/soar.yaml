@@ -1,0 +1,78 @@
+project:
+  name: "SoarAI"
+  version: "1.0.0"
+  description: "Paper artifact config (CNum GB models are primary; python models are just for reproducing model search results)"
+
+run:
+  run_id: "reproduced_results"
+  deterministic: true # For deterministic train-test data split and training (single-threaded data-prep and less compiler optimized)
+  cnum_model_train_seed: 42
+  data_prep_seed: 900
+  py_model_train_seed: 42
+
+paths:
+  core:
+    in_peak_list_dir: "../data/peak_lists/" # Directory where the input peak lists reside
+    in_peak_list_filename: "master.txt" # Path to input peak list
+  
+    run_root: "./" # Root directory of all output for the unique run
+    
+    data_dir: "data/" # Directory where processed data will be output
+    data_out_peak_list_dir: "peak_lists/" # Directory where the reagent-ion-specific peak lists will be output
+    data_combo_files_dir: "combo_files/" # Directory to which combo files are output (fully processed data)
+    data_combo_unidentified_dir: "unidentified_compounds/" # Directory to which improperly labeled compounds are output
+    
+    model_output_dir: "models/" # Directory to which trained models are output
+    pred_output_dir: "preds/" # Directory to output model predictions to for analysis
+
+    pred_logit_output_dir: "logits/" # Directory to which raw prediction values are output
+
+    data_combo_NO_train: "NO_train.csv" # Path to NO train combo file
+    data_combo_NH4_train: "NH4_train.csv" # Path to NH4 train combo file
+    data_combo_NO_test: "NO_test.csv" # Path to NO test combo file
+    data_combo_NH4_test: "NH4_test.csv" # Path to NH4 test combo file
+
+    venv:
+      analysis_dir: "../analysis/" # analysis venv directory (for analyzing model predictions)
+      py_models_dir: "../py_models/" # py_models venv directory (for training python models)
+
+  api:
+    uploads_dir: "./uploads/" # Directory where files passed to the REST API are output
+    uploads_graphs_dir: "graphs/" # Directory where uploaded graphs are output
+    uploads_detected_peaks_dir: "detected_peaks/" # Directory where peaks detected by the peak fitting algo are output
+
+    peak_fit_binary: "./utils/dist/fit_peaks/fit_peaks" # Path to the peak-fitting util binary
+
+    NH4_model_path: "./models/NH4_xgboost.cmod" # Path to the NH4 model to be used in the REST API
+    NO_model_path: "./models/NO_xgboost.cmod" # Path to the NO model to be used in the REST API
+
+    venv:
+      utils_dir: "./utils/" # utils venv directory (for peak fitting)
+
+  analysis:
+    plot_dir: "plots/" # Directory to which plots are output
+
+core:
+  model_hyperparams:
+    xgboost:
+      NH4_reagent:
+        n_learners: 400
+        learning_rate: 0.1
+        subsample: 0.04
+      NO_reagent:
+        n_learners: 1200
+        learning_rate: 0.1
+        subsample: 0.01
+    nn:
+      NH4_reagent:
+        epochs: 15
+      NO_reagent:
+        epochs: 20
+
+api:
+  n_model_instances: 30 # Number of pretrained model instances in the model pool for the REST API
+  
+  NH4_port: 18080
+  NO_port: 18081
+
+  allowed_origins: "*"

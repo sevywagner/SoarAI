@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.0.0] -
+Official release of this project
+
+### Added:
+- Finished SoarAI pipeline
+- Shell scripts for using the pipeline and reproducing manuscript results
+- Scripts for plotting results and analysis
+- Pipeline and determinism tests
+- Training Data
+- REST API for inference
+
+[1.0.0]: https://github.com/sevywagner/SoarAI/releases/tag/v1.0.0
+
 ## [0.1.0] — 2025-09-15
 Pre-release of this project.
 

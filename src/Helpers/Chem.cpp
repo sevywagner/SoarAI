@@ -28,24 +28,39 @@ namespace Chem {
     _masses.push_back(12);
     _masses.push_back(14.003074);
     _masses.push_back(15.99491462);
-    _masses.push_back(18.998403);
-    _masses.push_back(28.0855);
+    _masses.push_back(18.998403163);
+    _masses.push_back(27.97692653465);
     _masses.push_back(31.97207117);
-    _masses.push_back(35.4532);
+    _masses.push_back(34.968852682);
     _masses.push_back(-0.000548);
     _masses.push_back(18.03437412);
     _masses.push_back(17.02654909);
     _masses.push_back(19.01838971);
     _masses.push_back(18.01056468);
 
-    for (int i = 0; i < TOTAL_CHEMS; i++) {
+    for (int i{}; i < TOTAL_CHEMS; i++) {
       _chem_masses[_chemicals[i]] = _masses[i];
       _chem_idx[_chemicals[i]] = i;
     }
 
-    auto mask_ptr = std::make_unique<uint32_t[]>(4);
-    std::iota(mask_ptr.get(), mask_ptr.get() + 4, 0);
-    _PTR_mask = Mask<IDX, uint32_t>(4, 0, std::move(mask_ptr));
+    constexpr uint8_t n_chems_detected_NH4_reagant = 4;
+    constexpr uint8_t n_chems_detected_NO_reagant = 8;
+
+    _reagant_ions = { {"NH4"}, {"NO"} };
+
+    auto mask_ptr = std::make_unique<uint8_t[]>(n_chems_detected_NH4_reagant);
+    ::std::iota(mask_ptr.get(), mask_ptr.get() + n_chems_detected_NH4_reagant, 0);
+    _ion_masks["NH4"] = { ::std::move(mask_ptr), n_chems_detected_NH4_reagant };
+
+    mask_ptr.reset();
+    mask_ptr = ::std::make_unique<uint8_t[]>(n_chems_detected_NO_reagant);
+    ::std::iota(mask_ptr.get(), mask_ptr.get() + n_chems_detected_NO_reagant, 0);
+    _ion_masks["NO"] = { ::std::move(mask_ptr), n_chems_detected_NO_reagant };
+
+    /* _chemicals is sorted by mass in ascending order for the elemental combo recursive function
+       _proper_ordering can be used in Preprocess::decode_compounds to maintain standard chemical order
+       in the decoded compound */
+    _proper_ordering = { 9, 10, 11, 12, 1, 7, 4, 0, 2, 3, 6, 5, 8 };
   }
 
   // ---- Get singleton instance ----
@@ -64,14 +79,39 @@ namespace Chem {
     return _chem_idx[chemical];
   }
 
+  const ReagantIonMask &ChemMap::get_reagant_ion_mask(unenc_compound reagant_ion) {
+    return _ion_masks[reagant_ion.val];
+  }
+  
   // ---- Get masses vec ----
-  std::vector<double> ChemMap::get_masses() {
+  const std::vector<double> &ChemMap::get_masses() {
     return _masses;
   }
 
   // ---- Get chem vec ----
-  std::vector<std::string> ChemMap::get_chems() {
+  const std::vector<std::string> &ChemMap::get_chems() {
     return _chemicals;
+  }
+
+  const std::vector<unenc_compound> &ChemMap::get_reagant_ions() {
+    return _reagant_ions;
+  }
+
+  const ::std::array<uint8_t, TOTAL_CHEMS> &ChemMap::get_proper_ordering() {
+    return _proper_ordering;
+  }
+
+  unenc_compound ChemMap::find_reagant_ion(::std::span<double> &encoded_compound_view) {
+    unenc_compound res{ "" };
+    uint8_t ri_ctr{ 0 };
+    
+    while (ri_ctr < _reagant_ions.size() &&
+	   !::Chem::uses_reagant_ion(encoded_compound_view, _reagant_ions[ri_ctr])) { ri_ctr++; }
+    
+    if (ri_ctr < _reagant_ions.size())
+      res = _reagant_ions[ri_ctr];
+    
+    return res;
   }
 
   // ----------------
@@ -79,14 +119,15 @@ namespace Chem {
   // ----------------
 
   // ---- Compare compounds ----
-  bool compounds_are_equal(const Matrix<double> &compound1, const Matrix<double> &compound2) {
-    if (compound1.get_rows() != compound2.get_rows() || compound1.get_cols() > 1 || compound1.get_cols() > 1) {
-      std::cerr << "Compound comparison err -- misaligned dims" << std::endl;
-      exit(1);
+  bool compounds_are_equal(const ::std::span<double> &compound1, const ::std::span<double> &compound2) {
+    if (compound1.size() != compound2.size()) {
+      throw ::std::invalid_argument("Compound comparison err -- misaligned dims");
     }
 
-    for (size_t i = 0; i < TOTAL_CHEMS; i++) {
-      if (std::round(CHEM_SCALE_FACTOR / compound1.get(i, 0)) != std::round(CHEM_SCALE_FACTOR / compound2.get(i, 0))) {
+    for (size_t i{}; i < TOTAL_CHEMS; i++) {
+      int compound1_el_ct = ::std::round(compound1[i] / CHEM_SCALE_FACTOR);
+      int compound2_el_ct = ::std::round(compound2[i] / CHEM_SCALE_FACTOR);
+      if (compound1_el_ct != compound2_el_ct) {
 	return false;
       }
     } 
@@ -101,37 +142,35 @@ namespace Chem {
   }
 
   // ---- Get the mass of a compound ----
-  double get_compound_mass(const Matrix<double> &compound) {
-    if (compound.get_rows() != TOTAL_CHEMS) {
-      std::cerr << "Malformed compound encoding in get_compound_mass" << std::endl;
-      exit(1);
+  double get_compound_mass(const ::std::span<double> &compound) {
+    if (compound.size() != TOTAL_CHEMS) {
+      throw ::std::invalid_argument("Malformed compound encoding in get_compound_mass -- size != TOTAL_CHEMS");
     }
 
     auto *cm = ChemMap::get_chem_map();
     auto masses = cm->get_masses();
   
-    double total_mass;
-    for (size_t i = 0; i < TOTAL_CHEMS; i++) {
-      total_mass += (masses[i] * (compound.get(i, 0) / CHEM_SCALE_FACTOR));
+    double total_mass{};
+    for (size_t i{}; i < TOTAL_CHEMS; i++) {
+      total_mass += (masses[i] * ::std::round(compound[i] / CHEM_SCALE_FACTOR));
     }
 
     return total_mass;
   }
 
-  // ---- Check the 4 criterea of a compound ----
-  CritereaCheckRes check_criterea(const Matrix<double> &compound) {
+  template <typename T> static CritereaCheckRes crit_check_logic(const T &compound) {
     std::vector<bool> criterea_mask;
-    for (int i = 0; i < 4; i++)
+    for (int i{}; i < 4; i++)
       criterea_mask.push_back(true);
   
     bool did_pass{true};
     auto *cm = ChemMap::get_chem_map();
 
-    bool contains_nh4 = compound.get(cm->get_idx("NH4"), 0) > 0;
-    bool contains_nh3 = compound.get(cm->get_idx("NH3"), 0) > 0;
-    uint32_t n_hydrogen = static_cast<uint32_t>(compound.get(cm->get_idx("H"), 0) / CHEM_SCALE_FACTOR);
-    uint32_t n_carbon = static_cast<uint32_t>(compound.get(cm->get_idx("C"), 0) / CHEM_SCALE_FACTOR);
-    uint32_t n_nitrogen = static_cast<uint32_t>(compound.get(cm->get_idx("N"), 0) / CHEM_SCALE_FACTOR);
+    bool contains_nh4 = compound[cm->get_idx("NH4")] > 0;
+    bool contains_nh3 = compound[cm->get_idx("NH3")] > 0;
+    uint32_t n_hydrogen = ::std::round(compound[cm->get_idx("H")] / CHEM_SCALE_FACTOR);
+    uint32_t n_carbon = ::std::round(compound[cm->get_idx("C")] / CHEM_SCALE_FACTOR);
+    uint32_t n_nitrogen = ::std::round(compound[cm->get_idx("N")] / CHEM_SCALE_FACTOR);
 
     if (contains_nh4) {
       // has NH4 and the number of hydrogen is odd
@@ -165,6 +204,22 @@ namespace Chem {
     return { std::move(criterea_mask), did_pass };
   }
 
+  // ---- Check the 4 criterea of a compound ----
+  CritereaCheckRes check_criterea(const ::std::span<double> &compound) {
+    if (compound.size() != TOTAL_CHEMS) {
+      throw ::std::invalid_argument("Malformed compound encoding in check_criterea -- size != TOTAL_CHEMS");
+    }
+    
+    return crit_check_logic(compound);
+  }
+
+  CritereaCheckRes check_criterea(const ::CNum::DataStructs::Matrix<double> &compound) {
+    if (compound.get_cols() > 1)
+      throw ::std::invalid_argument("Check criterea error -- whole matrix provided, use matrix.get(ROW, i) to pass a single compound");
+    
+    return crit_check_logic(compound);
+  }
+
   // ---- "Unsimplify" compoound by factoring polyatomics out and adjusting compound accordingly ----
   Matrix<double> factor_polyatomics(const Matrix<double> &encoded_simplified) {
     auto encoded_unsimplified = (Matrix<double>(std::cref(encoded_simplified))).move_ptr();
@@ -180,7 +235,7 @@ namespace Chem {
   
     auto polyatomics_encoded = (::Preprocess::encode_compounds(polyatomics)).move_ptr();
 
-    for (int i = 0; i < encoded_simplified.get_rows(); i++) {
+    for (int i{}; i < encoded_simplified.get_rows(); i++) {
       for (int j = 0; j < polyatomics.size(); j++) {
 	bool contains_polyatomic{ true };
       
@@ -208,11 +263,19 @@ namespace Chem {
   }
 
   // ---- Check if a compound is for PTR mode ----
-  bool is_PTR(const Matrix<double> &encoded_unsimplified) {
+  bool uses_reagant_ion(const ::std::span<double> &encoded_unsimplified, unenc_compound reagant_ion) {
     auto *cm = ChemMap::get_chem_map();
-    for (int i = PTR_END_IDX; i < POLYATOMIC_START_IDX; i++) {
-      if (encoded_unsimplified.get(i, 0) > 0)
-	return false;
+    auto &mask = cm->get_reagant_ion_mask(reagant_ion);
+
+    size_t ctr{};
+    
+    for (int i{}; i < POLYATOMIC_START_IDX; i++) {
+      if (ctr >= mask.length || mask.indeces[ctr] != i) {
+        if (encoded_unsimplified[i] > 0.0)
+	  return false;
+      } else {
+	ctr++;
+      }
     }
   
     return true;

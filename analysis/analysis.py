@@ -1,16 +1,29 @@
 from sklearn.metrics import roc_auc_score, f1_score, confusion_matrix, roc_curve
 import matplotlib.pyplot as plt
+import yaml
 import numpy as np
+import math
 import sys
+from pathlib import Path
 
-if (len(sys.argv) < 3):
-    print("Must pass in path(s) preds and output plots directory ie python3 this_program.py /path/to/plots/dir/ /path/to/preds1.txt /path/to/preds2.txt ...")
+if (len(sys.argv) != 3):
+    print("Invalid arguments. Usage: python3 ../analysis/analysis.py <path to yaml config> <reagent ion (NH4|NO)>")
     sys.exit(1)
 
-if sys.argv[1][-1] != '/':
-    sys.argv[1] += '/'
+with open(sys.argv[1], 'r') as f:
+    config = yaml.safe_load(f)
 
-files = sys.argv[2:]
+reagent_ion = sys.argv[2]
+    
+run_dir = config['paths']['core']['run_root'] + config['run']['run_id'] + '/'
+preds_dir = run_dir + config['paths']['core']['pred_output_dir']
+    
+files = [
+    preds_dir + reagent_ion + '_xgboost_preds.txt',
+    preds_dir + reagent_ion + '_lgbm_preds.txt',
+    preds_dir + reagent_ion + '_gbdt_preds.txt',
+    preds_dir + reagent_ion + '_nn_preds.txt',
+]
 
 ys = []
 y_preds = []
@@ -32,10 +45,12 @@ for path in files:
 
     ys.append(y)
     y_preds.append(y_pred)
+    test = np.array(y) == 1
 
 colors = ['red', 'blue', 'green', 'yellow']
 labels = ['XGBoost', 'LightGBM', 'GBDT', 'Neural Network']
-    
+labels = [sys.argv[2] + ' ' + x for x in labels]
+
 fig, ax = plt.subplots(1, 1)
 cms = []
 
@@ -61,20 +76,20 @@ ax.set_ylabel('True Positive Rate')
 ax.set_title('ROC Curve')
 ax.legend()
 
-fig.savefig(f'{sys.argv[1]}ROC_AUC.png', format='png', dpi=600)
+plots_dir = run_dir + config['paths']['analysis']['plot_dir']
+Path(plots_dir).mkdir(parents=True, exist_ok=True)
+fig.savefig(f'{plots_dir}{sys.argv[2]}_ROC_AUC.png', format='png', dpi=600)
 
 plt.show()
 
 for x, cm in enumerate(cms):
     fig, ax = plt.subplots(1, 1)
     im = ax.imshow(cm, cmap="Blues")
-
     plt.colorbar(im, ax=ax)
 
     for i in range(cm.shape[0]):
         for j in range(cm.shape[1]):
             ax.text(j, i, cm[i, j], ha='center', va='center', color=('white' if i == 0 and j == 0 else 'black'))
-
 
     ax.set_xlabel('Predicted Label')
     ax.set_ylabel('True Label')
@@ -84,6 +99,6 @@ for x, cm in enumerate(cms):
     ax.set_xticklabels(['0', '1'])
     ax.set_yticklabels(['0', '1'])
 
-    fig.savefig(f'{sys.argv[1]}{labels[x]}.png', format='png', dpi=600)
+    fig.savefig(f'{plots_dir}{labels[x]}.png', format='png', dpi=600)
     
     plt.show()

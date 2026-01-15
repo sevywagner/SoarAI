@@ -1,8 +1,8 @@
-file(GLOB_RECURSE HELPERS_SRC CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
-file(GLOB_RECURSE HELPERS_HEADERS CONFIGURE_DEPENDS "${INCLUDE_DIR}/*.h")
+add_library(helper_lib STATIC Chem.cpp Postprocess.cpp YamlHelpers.cpp Preprocess.cpp)
 
-add_library(helper_lib SHARED
-	    ${HELPERS_HEADERS}
-	    ${HELPERS_SRC})
+if (SOAR_BUILD_API)
+   target_sources(helper_lib PRIVATE InferenceAPI.cpp SysUtils.cpp)
+endif()
 
+target_link_libraries(helper_lib PUBLIC yaml-cpp::yaml-cpp)
 target_include_directories(helper_lib PUBLIC ${INCLUDE_DIR})

@@ -1,62 +1,83 @@
 # SoarAI: Ion composition identification in time-of-flight mass spectra
 
-> Status: pre-alpha. Currently only tested on Linux (Gentoo). Data availability still pending
+> Status: v1.0.0. Currently only supported on Linux. 
 
-⚠️ License: Internal use only. Modification allowed; redistribution prohibited. See LICENSE.
+This project is a part of the research I have been conducting with the Texas A&M meteorology department. This code demonstrates an end to end machine learning pipeline using my <a href="https://github.com/sevywagner/CNum">CNum library</a>. In this project I created a binary classifier for the identification of ion compositions in time-of-flight mass spectra. Given an m/z value my program will return a list of all the possible elemental combinations with a ppm within the range [-50, 50] along with the probability that they represent that peak.
 
-This project is a part of the research I have been conducting with the Texas A&M meteorology department.
- This code demonstrates an end to end machine learning pipeline using my <a href="https://github.com/sevywagner/CNum">CNum library</a>. In this project I created a binary classifier for the identification of ion compositions in time-of-flight mass spectra. Given an m/z value my program will return a list of all the possible elemental combinations with a ppm within the range of positive or negative 50 along with the probability that they represent that peak.
+## Dependencies
+- <a href="https://github.com/sevywagner/CNum/releases/tag/v0.2.2">CNum v0.2.2</a> - Required for CNum GBModel training and using the REST API
+- <a href="https://github.com/mikefarah/yq">yq</a> - Required for reading yaml configs in shell scripts
 
-## Build
+## Supported platforms
+- Linux (Gentoo, Arch, Ubuntu) (GCC)
+
+## Entry Points
+- tests/ - Test the entire pipeline and determinism on a small dataset
+- reproduce/ - Reproduce all of the results models and figures from the manuscript
+- web_app/ - Locally host SoarAI
+
+All provided bash scripts build all necessary binaries and prepare all necessary Python environments for their given tasks. 
+
+## Tests
+Testing the pipeline is recommended to ensure that the training is deterministic and all of the modules build and execute properly on your machine.
+
+To run the tests navigate to the "tests" directory and run the provided shell script:
 ```bash
-mkdir build
-cd build
-cmake ..
-make
+# From SoarAI source directory
+cd tests
+./shell_scripts/run_test_pipeline.sh
 ```
 
+The results of the determinism tests are printed to the terminal. The artifacts produced by the test are saved to tests/test_results along with a copy of the test runtime configuration. 
+
+## Reproduce manuscript results
+To reproduce all models and figures in the manuscript navigate to the "reproduce" directory and run the provided shell script:
+```bash
+# From SoarAI source directory
+cd reproduce
+./shell_scripts/reproduce_all.sh
+```
+
+To reproduce the manuscript results use the provided yaml configuration, or at least preserve the seeds, hyperparameters, and deterministic setting from the default configuration if you must change the layout of the directory. 
+
+All artifacts produced will be output to the run directory which is ./run/reproduced_results by default. Inside there will be "models", "preds", "plots", and "data" directories. 8 total models will be produced there is one CNum XGBoost, Sklearn GBDT, Flaml LightGBM, and TensorFlow neural network for both NH4+ and NO+ reagent ions. The models directory contains the trained model files. The "preds" directory contains the predictions of all of the models on the test dataset. The plots directory contains all of the reproduced figures from the manuscript, and the data directory contains the split peak lists, and combo files. Combo files are the files in which the preprocessed data passed directly to the model is stored. 
+
+## Web App
+You can also host SoarAI locally by navigating to the "web_app" directory and running the provided shell script
+```bash
+# From SoarAI source directory
+cd web_app
+./shell_scripts/start_api.sh
+```
+
+This will start two REST APIs, one for the NH4+ xgboost model and one for the NO+ xgboost model on ports 18080 and 18081, respectively.
+### API endpoints
+- predict/ - provided by the CNum InferenceAPI interface
+- process-graph/ - takes in a mass spectrum, fits peaks (naively), and assigns formulas
+
+### *Important*
+The CNum inference API tools use the Crow C++ microframework which has shown vulnerabilites in the past. If you plan on hosting this and don't plan on it being only for your local network, an extra layer of security is highly recommended, for example token-based authorization and tunneling (i.e. via Cloudflare). The API also uses an exec function to execute a binary which is handled safely, but always has its inherent risks, so for this version only using the API locally is strongly recommended. 
+
+## Using the pipeline piece by piece
+If you prefer to use the pipelin piece by piece, here is a description of all the shell scripts:
+- data_prep.sh - Prepare data for both NO and NH4 models
+- validate_config.sh - Check to make sure the dirs in the yaml configs are properly formatted
+- build_cpp_bin.sh - Build all C++ modules
+- prepare_python_venvs.sh - Create Python venvs and install dependancies
+- train.sh - Train NH4+ and NO+ CNum GBModels
+- create_py_models.sh - Train all python models (LGBM, GBDT and Neural Net) (NH4+ and NO+)
+- infer.sh - Make inference on a single peak (input m/z value at peak)
+- analysis.sh - Make all of the figures for the model results
+
 ## Data preparation
-Sample peak lists will be provided in future releases.
+An example of data from real MS expiriments has been provided in data/peak_lists/master.txt. This file can be used to run the entirety of pipeline. Later on the "default paths" referred to when using the provided shell scripts use this data. To reproduce the results shown in the manuscript use this data, or even simpler, use the provided shell scripts in the build directory (seen below).
 
 ### Peak list format
 The peak lists used are currently exported from Igor Pro as tab seperate values in a txt file. The structure of the samples is as follows (as tagged by Igor Pro):<br></br>
 def	fit	ion	x0	tag	sumFormula	x_Lo	x_Hi	d2_Ctr	d2_Lo	d2_Hi	d1_Ctr	d1_Lo	d1_Hi	d0_Ctr	d0_Lo	d0_Hi	calFac	calUnit	charge	ionizFrac	fragOf	isotopeOf
 
-### Data prep from peak list
-```bash
-# Still inside build
-./src/data_prep /path/to/peak/list.txt /path/to/combined/combo_file/output.csv /path/to/split/combo/output
-```
+### Yaml runtime configurations
+The yaml runtime configurations in the "configs" directory can be used for setting up paths and expirement tracking. To run new expiriments simply change the run_id and the artifacts along with a copy of the config will be saved to a new folder. You can change the seeds and the hyperparameters of the models to get different results. 
 
-The extension of the split combo output path will be added automatically i.e. if you use /home/soar the
-generated files will be /home/soar_test_combos.csv and /home/soar_train_combos.csv
-
-## Train model
-```bash
-# Still inside build
-./src/train /path/to/train/combos.csv /path/to/test/combos.csv /path/to/model/output.cmod /path/to/pred/output.txt
-```
-
-A file containing the labeled values with the predicted values will be output by the train program.
-
-## Analysis
-```bash
-# From source directory
-cd analysis
-python3 -m venv ./
-source ./bin/activate
-python3 -m pip install -r requirements.txt
-python3 analysis.py /path/to/output/plot/directory/ /path/to/preds1.txt /path/to/preds2.txt ...
-```
-
-You can add as many prediction files as you'd like. This program will display binary classification metr
-ics such as F1 and ROC AUC and generate a ROC plot and a confusion matrix for each pred file and output
-them all to the output plot directory.
-
-## Inference
-```bash
-# In build directory
-./src/infer /path/to/model.cmod
-```
-
-Upon executing this program it will expect keyboard input. Input a m/z value and it will output its predictions. 
+### License
+This project is distributed under the MIT license
