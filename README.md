@@ -2,7 +2,7 @@
 
 > Status: v1.0.0. Currently only supported on Linux. 
 
-This project is a part of the research I have been conducting with the Texas A&M meteorology department. This code demonstrates an end to end machine learning pipeline using my <a href="https://github.com/sevywagner/CNum">CNum library</a>. In this project I created a binary classifier for the identification of ion compositions in time-of-flight mass spectra. Given an m/z value my program will return a list of all the possible elemental combinations with a ppm within the range [-50, 50] along with the probability that they represent that peak.
+This project is a part of the research I have been conducting with the Texas A&M meteorology department. This code demonstrates an end to end machine learning pipeline using my <a href="https://github.com/sevywagner/CNum">CNum library</a>. In this project I created a binary classifier for the identification of ion compositions in time-of-flight mass spectra. Given an m/z value my program will return a list of all the possible elemental combinations with a ppm within the range [-50, 50] along with the probability that they represent the peak at the m/z value.
 
 ## Dependencies
 - <a href="https://github.com/sevywagner/CNum/releases/tag/v0.2.2">CNum v0.2.2</a> - Required for CNum GBModel training and using the REST API
@@ -59,7 +59,7 @@ This will start two REST APIs, one for the NH4+ xgboost model and one for the NO
 The CNum inference API tools use the Crow C++ microframework which has shown vulnerabilites in the past. If you plan on hosting this and don't plan on it being only for your local network, an extra layer of security is highly recommended, for example token-based authorization and tunneling (i.e. via Cloudflare). The API also uses an exec function to execute a binary which is handled safely, but always has its inherent risks, so for this version only using the API locally is strongly recommended. 
 
 ## Using the pipeline piece by piece
-If you prefer to use the pipelin piece by piece, here is a description of all the shell scripts:
+If you prefer to use the pipeline piece by piece, here is a description of all the shell scripts:
 - data_prep.sh - Prepare data for both NO and NH4 models
 - validate_config.sh - Check to make sure the dirs in the yaml configs are properly formatted
 - build_cpp_bin.sh - Build all C++ modules
@@ -70,7 +70,7 @@ If you prefer to use the pipelin piece by piece, here is a description of all th
 - analysis.sh - Make all of the figures for the model results
 
 ## Data preparation
-An example of data from real MS expiriments has been provided in data/peak_lists/master.txt. This file can be used to run the entirety of pipeline. Later on the "default paths" referred to when using the provided shell scripts use this data. To reproduce the results shown in the manuscript use this data, or even simpler, use the provided shell scripts in the build directory (seen below).
+An example of data from real MS expiriments has been provided in data/peak_lists/master.txt. This file can be used to run the entirety of pipeline. 
 
 ### Peak list format
 The peak lists used are currently exported from Igor Pro as tab seperate values in a txt file. The structure of the samples is as follows (as tagged by Igor Pro):<br></br>
