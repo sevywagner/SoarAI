@@ -1,6 +1,14 @@
 # Changelog
 
-## [1.0.0] -
+## [1.0.1] - 2026-01-18
+Docker patch
+
+### Added:
+- Docker container used to run the entirety of the reproduction pipeline with preinstalled dependencies
+
+[1.0.1]: https://github.com/sevywagner/SoarAI/releases/tag/v1.0.1
+
+## [1.0.0] - 2026-01-15
 Official release of this project
 
 ### Added:
