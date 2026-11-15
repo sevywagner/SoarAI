@@ -1,0 +1,49 @@
+header {
+    top: 0;
+    left: 0;
+    width: 100%;
+    background-color: whitesmoke;
+    overflow-x: hidden;
+}
+
+header nav {
+    width: 100%;
+    display: flex;
+    padding-top: 3vh;
+    padding-bottom: 3vh;
+}
+
+.nav {
+    width: 80%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.link {
+    text-decoration: none;
+    background-color: rgb(69, 1, 1);
+    padding: 2vh;
+    margin-left: 2vh;
+    margin-right: 2vh;
+    font-size: 2.4vh;
+    color: white;
+    border-radius: 2vh;
+    border: 1px solid black;
+}
+
+.segment {
+    width: 10%;
+    display: flex;
+    justify-content: center;
+}
+
+.logo {
+    height: 9vh;
+    width: 9vh;
+}
+
+.logo img {
+    height: 100%;
+    width: 100%;
+}

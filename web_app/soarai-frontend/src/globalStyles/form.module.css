@@ -1,0 +1,40 @@
+.error {
+    color: red;
+    text-align: center;
+}
+
+form {
+    display: flex;
+    flex-direction: column;
+    width: 30%;
+}
+
+form input {
+    padding: 1vh;
+    padding-top: 2vh;
+    padding-bottom: 2vh;
+    border: none;
+}
+
+form input:focus {
+    outline: none;
+}
+
+form button {
+    padding: 1vh;
+    padding-top: 1.5vh;
+    padding-bottom: 1.5vh;
+    background-color: rgb(69, 1, 1);
+    border: 1px solid white;
+    color: white;
+    font-size: 2.4vh;
+}
+
+.dropdown {
+    border: 1px solid grey;
+    background-color: white;
+    margin-top: 2vh;
+    margin-bottom: 2vh;
+    padding: 1vh;
+    width: 100%;
+}

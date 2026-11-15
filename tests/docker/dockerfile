@@ -1,0 +1,18 @@
+FROM ubuntu:24.04
+
+WORKDIR /app
+COPY . ./
+
+RUN apt-get update && apt-get install -y cmake gcc g++ yq git python3-venv
+RUN git clone https://github.com/sevywagner/CNum --branch v0.2.2
+RUN git clone https://github.com/jbeder/yaml-cpp
+
+WORKDIR /app/CNum/build
+RUN cmake .. && make install
+
+WORKDIR /app/yaml-cpp/build
+RUN cmake .. && make install
+
+WORKDIR /app/tests
+
+CMD ["./shell_scripts/run_test_pipeline.sh"]

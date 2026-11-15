@@ -12,3 +12,14 @@ void Postprocess::sort_preds(Matrix<double> &encoded_compounds,
   encoded_compounds = encoded_compounds[mask];
   ppms = ppms[mask];
 }
+
+void Postprocess::sort_preds(Matrix<double> &encoded_compounds,
+			     Matrix<double> &preds,
+			     Matrix<double> &ppms,
+			     Matrix<uint8_t> &criterea_encoding) {
+  auto mask = preds.argsort(true);
+  preds = preds[mask];
+  encoded_compounds = encoded_compounds[mask];
+  ppms = ppms[mask];
+  criterea_encoding = criterea_encoding[mask];
+}

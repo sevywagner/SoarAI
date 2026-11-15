@@ -8,6 +8,8 @@ target_link_libraries(train PRIVATE yaml-cpp::yaml-cpp CNum::CNum helper_lib)
 target_link_libraries(infer PRIVATE CNum::CNum helper_lib)
 target_link_libraries(data_prep PRIVATE CNum::CNum helper_lib)
 
+target_compile_options(data_prep PRIVATE -g)
+
 if (SOAR_BUILD_API)
    add_executable(api_driver api_driver.cpp)
    target_link_libraries(api_driver PRIVATE CNum::CNum CNum::CNum_Deploy helper_lib)

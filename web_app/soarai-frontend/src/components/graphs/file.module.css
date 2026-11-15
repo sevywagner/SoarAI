@@ -1,0 +1,46 @@
+.form {
+    width: 50%;
+    background-color: white;
+    color: black;
+    padding: 2vh;
+}
+
+.form button {
+    border: none;
+}
+
+.wrapper {
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+}
+
+.input {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 50%;
+}
+
+input[type="file"] {
+    display: none;
+}
+
+.file {
+    text-align: center;
+    padding: 2vh;
+    width: 100%;
+    border: 1px solid black;
+    background-color: rgb(150, 150, 150);
+    color: white;
+}
+
+.green {
+    text-align: center;
+    padding: 2vh;
+    width: 100%;
+    border: 1px solid black;
+    color: white;
+    background-color: green;
+}

@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 set -euo pipefail
 
-./shell_scripts/build_cpp_bin_web_app.sh
+./shell_scripts/build_cpp_bin_web_app.sh ../configs/soar.yaml
 
 path=`yq -r '.paths.api.peak_fit_binary' ../configs/soar.yaml`
 
@@ -11,5 +11,4 @@ else
 	./shell_scripts/build_peak_fit_bin.sh
 fi
 
-../build/src/api_driver ../configs/soar.yaml NH4 &
-../build/src/api_driver ../configs/soar.yaml NO &
+../build/src/api_driver ../configs/soar.yaml

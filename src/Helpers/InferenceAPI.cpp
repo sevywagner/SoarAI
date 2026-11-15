@@ -84,15 +84,16 @@ namespace InferenceAPI {
   // ---- Preprocess data before using it as input to model ----
   Matrix<double> preprocess_func(crow::json::rvalue &req_body, crow::json::wvalue &res_body, Storage &storage) {
     auto mz_values = req_body["mz_array"];
-    ::Chem::unenc_compound ion(req_body["reagant_ion"].s());
+    ::Chem::unenc_compound ion(req_body["reagent_ion"].s());
 
-    // SoarAI currently only supports ammonium and nitrosyl reagant ions
-    if (ion.val == "def" || !(ion.val == "NH4" || ion.val == "NO"))
+    // SoarAI currently only supports H3O+, NH4+, NO+
+    if (ion.val != "" && ion.val != "NH4" && ion.val != "NO" && ion.val != "H3O")
       throw ::std::invalid_argument("Invalid reagent ion: " + ion.val);
 
     ::std::vector< Matrix<double> > model_data_matrices;
     ::std::vector< Matrix<double> > encoded_compounds_matrices;
     ::std::vector< Matrix<double> > ppm_matrices;
+    ::std::vector< Matrix<uint8_t> > cri_enc_matrices;
     model_data_matrices.reserve(mz_values.size());
     encoded_compounds_matrices.reserve(mz_values.size());
     ppm_matrices.reserve(mz_values.size());
@@ -105,34 +106,33 @@ namespace InferenceAPI {
 
       size_t temp = total_rows;
       total_rows += data.model_data.get_rows();
-    
+
+      auto cri_enc = ::std::make_unique<uint8_t[]>((total_rows - temp) * ::Chem::N_CRITEREA);
       for (size_t j = temp; j < total_rows; j++) {
-	res_body["critereaEncodings"][j] = crow::json::wvalue::list();
-	for (int k = 0; k < 4; k++) {
-	  res_body["critereaEncodings"][j][k] = data.model_data.get(j - temp, k);
-	}
+	for (int k = 0; k < ::Chem::N_CRITEREA; k++)
+	  cri_enc[(j - temp) * ::Chem::N_CRITEREA + k] = data.model_data.get(j - temp, k);
       }
-    
+      
+      
       model_data_matrices.push_back(::std::move(data.model_data));
       encoded_compounds_matrices.push_back(::std::move(data.encoded_compounds));
       ppm_matrices.push_back(::std::move(data.ppms));
+      cri_enc_matrices.emplace_back(total_rows - temp, ::Chem::N_CRITEREA, ::std::move(cri_enc));
     }
-
-    auto ec = Matrix<double>::combine_vertically(encoded_compounds_matrices, total_rows);
-    auto ppms = Matrix<double>::combine_vertically(ppm_matrices, total_rows);
-    auto res = Matrix<double>::combine_vertically(model_data_matrices, total_rows);
   
-    storage.encoded_compounds = ::std::move(ec);
-    storage.ppms = ::std::move(ppms);
-  
-    return res;
+    storage.encoded_compounds = Matrix<double>::combine_vertically(encoded_compounds_matrices, total_rows);
+    storage.ppms = Matrix<double>::combine_vertically(ppm_matrices, total_rows);
+    storage.criterea_encodings = Matrix<uint8_t>::combine_vertically(cri_enc_matrices, total_rows);	  
+    
+    return Matrix<double>::combine_vertically(model_data_matrices, total_rows);
   }
 
   // ---- Postprocess data and save in the response ----
   void postprocess_func(Matrix<double> &preds, crow::json::wvalue &res_body, Storage &storage) {
-    Postprocess::sort_preds(::std::ref(storage.encoded_compounds),
-			    ::std::ref(preds),
-			    ::std::ref(storage.ppms));
+    Postprocess::sort_preds(storage.encoded_compounds,
+			    preds,
+			    storage.ppms,
+			    storage.criterea_encodings);
 
     auto decoded_unsimplified_compounds = Preprocess::decode_compounds(storage.encoded_compounds);
     auto decoded_simplified_compounds = Preprocess::decode_compounds(Preprocess::simplify_compounds(storage.encoded_compounds));
@@ -142,6 +142,12 @@ namespace InferenceAPI {
     res_body["uCompounds"] = crow::json::wvalue::list();
     res_body["ppms"] = crow::json::wvalue::list();
 
+    for (size_t j = 0; j < storage.criterea_encodings.get_rows(); j++) {
+      res_body["critereaEncodings"][j] = crow::json::wvalue::list();
+      for (int k = 0; k < storage.criterea_encodings.get_cols(); k++)
+	res_body["critereaEncodings"][j][k] = storage.criterea_encodings.get(j, k);
+    }
+    
     for (size_t i = 0; i < preds.get_rows(); i++) {
       res_body["scores"][i] = preds.get(i, 0) * 100; // convert to percentage
       res_body["compounds"][i] = decoded_simplified_compounds[i].val;

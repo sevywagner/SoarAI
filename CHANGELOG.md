@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.0] - 2026-11-13
+Manuscript cited version
+
+### Added:
+- Unified reagent models
+- Removed LGBM and GB training and analysis
+- Added script for generating peak fitting figure for manuscript (figure 4)
+- Corrected old peak lists to dedup and correct ions and centroids values (x0) to account for charge
+- Replaced web app peak fitting algo with a new AI-generated version
+
+[1.1.0]: https://github.com/sevywagner/SoarAI/releases/tag/v1.1.0
+
 ## [1.0.1] - 2026-01-18
 Docker patch
 

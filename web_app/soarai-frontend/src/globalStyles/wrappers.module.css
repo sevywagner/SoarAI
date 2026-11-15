@@ -1,0 +1,23 @@
+.center {
+    display: flex;
+    justify-content: center;
+}
+
+.three {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.three-small {
+    width: 15%;
+    display: flex;
+    justify-content: center;
+    z-index: 5;
+}
+
+.three-big {
+    width: 70%;
+    display: flex;
+    justify-content: center;
+}

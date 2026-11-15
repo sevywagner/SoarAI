@@ -1,0 +1,62 @@
+h1 {
+    text-align: center;
+}
+
+.check-wrap {
+    display: flex;
+    justify-content: center;
+    padding: 2vh;
+    margin: 5vh;
+    position: fixed;
+    right: 0;
+    white-space: wrap;
+    width: 50%;
+}
+
+.checkboxes {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 2vh;
+    border: 1px solid white;
+    border-radius: 2vh;
+    align-self: flex-end;
+}
+
+.checkboxes div {
+    margin: 2vh;
+}
+
+.thuggin {
+    background-image: url('../../media/b.gif');
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.thuggin h1 {
+    color: white;
+}
+
+.title {
+    text-align: center;
+    font-size: 5vh;
+    font-family: 'Raleway';
+}
+
+.table-wrap {
+    display: flex;
+    align-items: flex-start;
+}
+
+@media only screen and (max-width: 1280px) {
+    .check-wrap {
+        position: relative;
+        width: 70%;
+    }
+
+    .table-wrap {
+        flex-direction: column;
+        align-items: center;
+    }
+}

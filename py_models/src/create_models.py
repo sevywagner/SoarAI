@@ -1,9 +1,8 @@
 import numpy as np
-from sklearn.metrics import recall_score, precision_score, f1_score, confusion_matrix, roc_auc_score
-from sklearn.model_selection import train_test_split
 import pickle
 import argparse
 import yaml
+import tensorflow as tf
 
 parser = argparse.ArgumentParser(
     prog='CreateModels',
@@ -14,7 +13,6 @@ parser.add_argument('-n', '--neural-net', action='store_true')
 parser.add_argument('-g', '--gradient-booster', action='store_true')
 parser.add_argument('-l', '--lgbm', action='store_true')
 parser.add_argument('-d', '--dump-logits')
-parser.add_argument('-r', '--reagent-ion', required=True)
 parser.add_argument('-c', '--config', required=True)
 
 args = parser.parse_args()
@@ -23,51 +21,26 @@ with open(args.config, 'r') as f:
     config = yaml.safe_load(f)
 
 RANDOM_SEED = config['run']['py_model_train_seed']
+D_MODEL = 25
 
-def getData(comboFile, split=False):
-    '''
-        Function:
-            Get data from labeled "combo" file and seperate train and test sets
-        
-        Parameters:
-            comboFile (str): name of the combo file
-            split (boolean): whether or not to split the data into train or test sets
-
-        Returns:
-            if split
-                x_train, x_test, y_train, y_test (list(list(float)), list(list(float)), list(int), list(int)):
-                    training data samples,
-                    test data samples,
-                    train labels,
-                    test labels
-            else
-                x, y (list(list(float))), list(int)):
-                    data samples,
-                    labels
-    '''
-
-    X = []
-    y = []
+def getData(comboFile):
+    # First pass: count rows
     with open(comboFile) as f:
-        lines = f.readlines()
-        for line in lines:
-            segments = line.split(',')
+        n_rows = sum(1 for _ in f)
 
-            sample = [float(i) for i in segments[:-1]]
-            label = float(segments[-1])
+    # Allocate final storage directly
+    X = np.empty((n_rows, D_MODEL), dtype=np.float32)
+    y = np.empty(n_rows, dtype=np.int8)
 
-            X.append(sample)
-            y.append(label)
+    # Second pass: fill arrays
+    with open(comboFile) as f:
+        for i, line in enumerate(f):
+            values = np.fromstring(line, sep=',', dtype=np.float32)
 
-        f.close()
+            X[i] = values[:-1]
+            y[i] = values[-1]
 
-    if split:
-        return train_test_split(X, y,
-                                test_size=.3,
-                                random_state=RANDOM_SEED,
-                                shuffle=True)
-    else:
-        return np.array(X, dtype=np.float32), np.array(y, dtype=np.int8)
+    return X, y
 
 def output_preds(output_path, preds, labels):
     '''
@@ -97,22 +70,6 @@ def output_logits(output_path, logits):
             fw.write(str(value) + '\n')
         fw.close()
 
-def examine_preds(y_pred, y_test):
-    '''
-        Function:
-            Print analysis of model predictions with binary classification metrics
-
-        Parameters:
-            y_pred (list(int)): model predictions
-            y_test (list(int)): true data labels
-    '''
-    print(f'Precision: {precision_score(y_test, y_pred)}')
-    print(f'Recall: {recall_score(y_test, y_pred)}')
-    print(f'F1: {f1_score(y_test, y_pred)}')
-    print(f'ROC AUC: {roc_auc_score(y_test, y_pred)}')
-    print(f'Confusion Matrix: \n{confusion_matrix(y_test, y_pred)}')
-
-
 def create_lgbm_model(model_output_path,
                       preds_output_path,
                       logit_output_path,
@@ -139,7 +96,6 @@ def create_lgbm_model(model_output_path,
     model.fit(x_train, y_train)
     
     preds = model.predict(x_test)
-    examine_preds(preds, y_test);
     
     output_preds(preds_output_path, preds, y_test)
     if (dump_logits):
@@ -150,11 +106,7 @@ def create_lgbm_model(model_output_path,
         f.close()
 
 def create_neural_network(model_output_path,
-                          preds_output_path,
-                          logit_output_path,
                           X_train, y_train,
-                          X_test, y_test,
-                          dump_logits,
                           epochs):
     '''
         Function: 
@@ -171,7 +123,6 @@ def create_neural_network(model_output_path,
             dump_logits (bool): whether or not to output logits (used in determinism test)
             epochs (int): number of epochs to train for
     '''
-    import numpy as np
     import tensorflow as tf
     from tensorflow import keras
     from tensorflow.keras import layers
@@ -179,12 +130,10 @@ def create_neural_network(model_output_path,
     tf.random.set_seed(RANDOM_SEED);
     tf.keras.utils.set_random_seed(RANDOM_SEED)
     
-    X_train = tf.constant(X_train)
-    X_test = tf.constant(X_test)
-    
     normalizer = layers.Normalization(axis=-1)
     normalizer.adapt(X_train)
 
+    import tensorflow as tf
     def binary_focal_loss(gamma=2.0, alpha=0.25):
         def loss(y_true, y_pred):
             eps = keras.backend.epsilon()
@@ -206,7 +155,7 @@ def create_neural_network(model_output_path,
         model = keras.Model(inp, out)
         return model
 
-    model = make_model(18)
+    model = make_model(D_MODEL)
 
     opt = keras.optimizers.Adam(learning_rate=3e-4)
     loss_fn = binary_focal_loss(gamma=2.0, alpha=0.25) if USE_FOCAL else keras.losses.BinaryCrossentropy()
@@ -232,7 +181,15 @@ def create_neural_network(model_output_path,
         epochs=epochs,
         class_weight=class_weight
     )
+    
+    model.save(model_output_path)
+    return model
 
+def evaluate_nn(model,
+                X_test, y_test,
+                dump_logits,
+                preds_output_path,
+                logit_output_path):
     preds = np.array(model.predict(X_test, verbose=False).ravel())
             
     if (dump_logits):
@@ -240,10 +197,7 @@ def create_neural_network(model_output_path,
 
     preds = np.round(preds)
     output_preds(preds_output_path, preds, y_test)
-    examine_preds(preds, y_test);
-
-    model.save(model_output_path)
-
+    
 def tune_gbdt(model_output_path,
               preds_output_path,
               logit_output_path,
@@ -286,7 +240,6 @@ def tune_gbdt(model_output_path,
     print(best_model.get_params())
     
     preds = best_model.predict(x_test)
-    examine_preds(preds, y_test);
     
     output_preds(preds_output_path, preds, y_test)
     if (dump_logits):
@@ -326,8 +279,7 @@ def create_gbdt_model(model_output_path,
     model.fit(x_train, y_train)
     
     preds = model.predict(x_test)
-    examine_preds(preds, y_test)
-
+    
     output_preds(preds_output_path, preds, y_test)
     if (dump_logits):
         output_logits(logit_output_path, preds)
@@ -338,12 +290,8 @@ def create_gbdt_model(model_output_path,
 
 run_dir = config['paths']['core']['run_root'] + config['run']['run_id'] + '/'
 combo_dir = run_dir + config['paths']['core']['data_dir'] + config['paths']['core']['data_combo_files_dir']
-train_combos_path = combo_dir + config['paths']['core']['data_combo_' + args.reagent_ion + '_train']
-test_combos_path = combo_dir + config['paths']['core']['data_combo_' + args.reagent_ion + '_test']
-
-ion = args.reagent_ion
-x_train, y_train = getData(train_combos_path)
-x_test, y_test = getData(test_combos_path)
+train_combos_path = combo_dir + config['paths']['core']['data_combo_train'] + '.csv'
+test_combos_path = combo_dir + config['paths']['core']['data_combo_test']
 
 model_output_dir = run_dir + config['paths']['core']['model_output_dir']
 pred_output_dir = run_dir + config['paths']['core']['pred_output_dir']
@@ -352,27 +300,39 @@ logit_output_dir = pred_output_dir + config['paths']['core']['pred_logit_output_
 dump_logits = args.dump_logits != None
 logit_id = args.dump_logits if dump_logits else ''
 
-if (args.lgbm):
-    create_lgbm_model(f"{model_output_dir}{args.reagent_ion}_lgbm.pkl",
-                      f"{pred_output_dir}{args.reagent_ion}_lgbm_preds.txt",
-                      f"{logit_output_dir}{args.reagent_ion}_lgbm_logits_{logit_id}.txt",
-                      x_train, y_train,
-                      x_test, y_test,
-                      dump_logits)
- 
-if (args.neural_net):
-    create_neural_network(f"{model_output_dir}{args.reagent_ion}_nn.keras",
-                          f"{pred_output_dir}{args.reagent_ion}_nn_preds.txt",
-                          f"{logit_output_dir}{args.reagent_ion}_nn_logits_{logit_id}.txt",
-                          x_train, y_train,
-                          x_test, y_test,
-                          dump_logits,
-                          int(config['core']['model_hyperparams']['nn'][args.reagent_ion + '_reagent']['epochs']))
+X_train, y_train = getData(train_combos_path)
 
+reagent_ions = [
+    'NH4',
+    'NO',
+    'H3O'
+]
+
+test_files = [test_combos_path + '_' + ion + '.csv' for ion in reagent_ions]
+test_files.append(test_combos_path + '.csv')
+
+X_train = tf.constant(X_train)
+
+if (args.lgbm):
+    print('LGBM is no longer used in this research')
+    
 if (args.gradient_booster):
-    create_gbdt_model(f"{model_output_dir}{args.reagent_ion}_gbdt.pkl",
-                      f"{pred_output_dir}{args.reagent_ion}_gbdt_preds.txt",
-                      f"{logit_output_dir}{args.reagent_ion}_gbdt_logits_{logit_id}.txt",
-                      x_train, y_train,
-                      x_test, y_test,
-                      dump_logits)
+    print('Standard GBDT is no longer used in this research')
+    
+
+if (args.neural_net):
+    model = create_neural_network(f"{model_output_dir}nn.keras",
+                                  X_train, y_train,
+                                  int(config['core']['model_hyperparams']['nn']['epochs']))
+
+    for idx, path in enumerate(test_files):
+        X_test, y_test = getData(path)
+        if X_test.size == 0 or y_test.size == 0:
+            continue
+        
+        X_test = tf.constant(X_test)
+        evaluate_nn(model,
+                    X_test, y_test,
+                    dump_logits,
+                    f"{pred_output_dir}{reagent_ions[idx] + '_' if idx < len(test_files) - 1 else ''}nn_preds.txt",
+                    f"{logit_output_dir}{reagent_ions[idx] + '_' if idx < len(test_files) - 1 else ''}nn_logits_{logit_id}.txt");

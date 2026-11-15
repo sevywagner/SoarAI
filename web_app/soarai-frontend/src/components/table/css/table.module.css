@@ -1,0 +1,93 @@
+.item {
+    display: flex;
+    justify-content: space-between;
+    border-bottom: 1px solid black;
+}
+
+.wrapper {
+    display: flex;
+    justify-content: center;
+}
+
+.table {
+    width: 65vh;
+    margin: 5vh;
+    padding: 3vh;
+    background-color: whitesmoke;
+    border-radius: 2vh;
+    color: black;
+}
+
+.table tr th {
+    width: 10vh;
+    padding-top: 1.5vh;
+    padding-bottom: 1.5vh;
+    font-size: 2.4vh;
+}
+
+
+.table td {
+    text-align: center;
+    padding-top: .7vh;
+    padding-bottom: .7vh;
+}
+
+.center {
+    display: flex;
+    flex-direction: column;
+    /* align-items: center; */
+    margin: 2vh;
+}
+
+.center a {
+    text-align: center;
+    margin: 2vh;
+}
+
+.save {
+    margin-top: 5vh;
+    margin-left: 5vh;
+    margin-right: 5vh;
+    border: 1px solid white;
+    background-color: white;
+    padding: 2vh;
+    border-radius: 3vh;
+    font-size: 2.4vh;
+}
+
+.save:hover {
+    animation: hover .3s ease-in-out;
+    border: 1px solid white;
+    background-color: black;
+    color: white;
+}
+
+.download {
+    color: white;
+}
+
+.big {
+    width: 50%;
+}
+
+.small {
+    width: 30%;
+}
+
+.smaller {
+    width: 20%;
+}
+
+@keyframes hover {
+    0% {
+        border: 1px solid white;
+        background-color: white;
+        color: black;
+    }
+
+    100% {
+        border: 1px solid white;
+        background-color: black;
+        color: white;
+    }
+}

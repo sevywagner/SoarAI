@@ -15,9 +15,16 @@ namespace Chem {
     _chemicals.emplace_back("N");
     _chemicals.emplace_back("O");
     _chemicals.emplace_back("F");
+    _chemicals.emplace_back("Na");
+    _chemicals.emplace_back("Al");
     _chemicals.emplace_back("Si");
+    _chemicals.emplace_back("P");
     _chemicals.emplace_back("S");
     _chemicals.emplace_back("Cl");
+    _chemicals.emplace_back("K");
+    _chemicals.emplace_back("Ar");
+    _chemicals.emplace_back("Ca");
+    _chemicals.emplace_back("Br");
     _chemicals.emplace_back("+");
     _chemicals.emplace_back("NH4");
     _chemicals.emplace_back("NH3");
@@ -29,10 +36,17 @@ namespace Chem {
     _masses.push_back(14.003074);
     _masses.push_back(15.99491462);
     _masses.push_back(18.998403163);
+    _masses.push_back(22.98976928);
+    _masses.push_back(26.98153853);
     _masses.push_back(27.97692653465);
+    _masses.push_back(30.973761998);
     _masses.push_back(31.97207117);
     _masses.push_back(34.968852682);
-    _masses.push_back(-0.000548);
+    _masses.push_back(38.96370649);
+    _masses.push_back(39.96238312);
+    _masses.push_back(39.96259086);
+    _masses.push_back(78.9183376);
+    _masses.push_back(-0.000548579909);
     _masses.push_back(18.03437412);
     _masses.push_back(17.02654909);
     _masses.push_back(19.01838971);
@@ -43,24 +57,22 @@ namespace Chem {
       _chem_idx[_chemicals[i]] = i;
     }
 
-    constexpr uint8_t n_chems_detected_NH4_reagant = 4;
-    constexpr uint8_t n_chems_detected_NO_reagant = 8;
+    constexpr uint8_t n_chems_detected_NH4_reagent = 8;
+    constexpr uint8_t n_chems_detected_NO_reagent = 7;
+    constexpr uint8_t n_chems_detected_H3O_reagent = 15;
+    
+    _reagent_ions = { {"NH4"}, {"NO"}, {"H3O"} };
 
-    _reagant_ions = { {"NH4"}, {"NO"} };
-
-    auto mask_ptr = std::make_unique<uint8_t[]>(n_chems_detected_NH4_reagant);
-    ::std::iota(mask_ptr.get(), mask_ptr.get() + n_chems_detected_NH4_reagant, 0);
-    _ion_masks["NH4"] = { ::std::move(mask_ptr), n_chems_detected_NH4_reagant };
-
-    mask_ptr.reset();
-    mask_ptr = ::std::make_unique<uint8_t[]>(n_chems_detected_NO_reagant);
-    ::std::iota(mask_ptr.get(), mask_ptr.get() + n_chems_detected_NO_reagant, 0);
-    _ion_masks["NO"] = { ::std::move(mask_ptr), n_chems_detected_NO_reagant };
-
+    _ion_masks["NH4"] = { { 0, 1, 2, 3, 4, 7, 9, 10 }, n_chems_detected_NH4_reagent };
+    _ion_masks["NO"] = { { 0, 1, 2, 3, 4, 7, 10 }, n_chems_detected_NO_reagent };
+    _ion_masks["H3O"] = { { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 }, n_chems_detected_H3O_reagent };
+    _ion_masks[""] = { { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 }, n_chems_detected_H3O_reagent };
+    
     /* _chemicals is sorted by mass in ascending order for the elemental combo recursive function
        _proper_ordering can be used in Preprocess::decode_compounds to maintain standard chemical order
        in the decoded compound */
-    _proper_ordering = { 9, 10, 11, 12, 1, 7, 4, 0, 2, 3, 6, 5, 8 };
+    _proper_ordering = {17, 16, 19, 18, 1, 0, 6, 12, 14, 13, 10, 4, 11, 2, 5, 3, 8, 9, 7, 15};
+    _chem_quantity_ceilings = { 59, 30, 15, 21, 18, 2, 1, 11, 1, 10, 5, 3, 1, 1, 02 };
   }
 
   // ---- Get singleton instance ----
@@ -78,9 +90,13 @@ namespace Chem {
   size_t ChemMap::get_idx(std::string chemical) {
     return _chem_idx[chemical];
   }
+  
+  const ReagentIonMask &ChemMap::get_reagent_ion_mask(unenc_compound reagent_ion) {
+    return _ion_masks[reagent_ion.val];
+  }
 
-  const ReagantIonMask &ChemMap::get_reagant_ion_mask(unenc_compound reagant_ion) {
-    return _ion_masks[reagant_ion.val];
+  bool ChemMap::reagent_supported(unenc_compound reagent_ion) {
+    return _ion_masks.contains(reagent_ion.val);
   }
   
   // ---- Get masses vec ----
@@ -93,23 +109,27 @@ namespace Chem {
     return _chemicals;
   }
 
-  const std::vector<unenc_compound> &ChemMap::get_reagant_ions() {
-    return _reagant_ions;
+  const std::vector<unenc_compound> &ChemMap::get_reagent_ions() {
+    return _reagent_ions;
   }
 
   const ::std::array<uint8_t, TOTAL_CHEMS> &ChemMap::get_proper_ordering() {
     return _proper_ordering;
   }
 
-  unenc_compound ChemMap::find_reagant_ion(::std::span<double> &encoded_compound_view) {
+  const ::std::vector<uint32_t> &ChemMap::get_quantity_ceilings() {
+    return _chem_quantity_ceilings;
+  }
+
+  unenc_compound ChemMap::find_reagent_ion(::std::span<double> &encoded_compound_view) {
     unenc_compound res{ "" };
     uint8_t ri_ctr{ 0 };
     
-    while (ri_ctr < _reagant_ions.size() &&
-	   !::Chem::uses_reagant_ion(encoded_compound_view, _reagant_ions[ri_ctr])) { ri_ctr++; }
+    while (ri_ctr < _reagent_ions.size() &&
+	   !::Chem::uses_reagent_ion(encoded_compound_view, _reagent_ions[ri_ctr])) { ri_ctr++; }
     
-    if (ri_ctr < _reagant_ions.size())
-      res = _reagant_ions[ri_ctr];
+    if (ri_ctr < _reagent_ions.size())
+      res = _reagent_ions[ri_ctr];
     
     return res;
   }
@@ -263,9 +283,9 @@ namespace Chem {
   }
 
   // ---- Check if a compound is for PTR mode ----
-  bool uses_reagant_ion(const ::std::span<double> &encoded_unsimplified, unenc_compound reagant_ion) {
+  bool uses_reagent_ion(const ::std::span<double> &encoded_unsimplified, unenc_compound reagent_ion) {
     auto *cm = ChemMap::get_chem_map();
-    auto &mask = cm->get_reagant_ion_mask(reagant_ion);
+    auto &mask = cm->get_reagent_ion_mask(reagent_ion);
 
     size_t ctr{};
     

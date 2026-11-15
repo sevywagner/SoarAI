@@ -44,16 +44,14 @@ namespace Preprocess {
 	  chemical += compound.val[i + 1];
 	}
 
-	if (::std::isupper(static_cast<unsigned char>(chemical[0])) == 0) {
+	if (::std::isupper(static_cast<unsigned char>(chemical[0])) == 0 && chemical[0] != '+') {
 	  continue;
 	}
 
 	::std::string num{""};
 	for (int j = i + chemical.size(); j < compound.val.size(); j++) {
-	  if (::std::isdigit(static_cast<unsigned char>(compound.val[j])
-			     ) == 0) {
+	  if (::std::isdigit(static_cast<unsigned char>(compound.val[j])) == 0)
 	    break;
-	  }
 
 	  num += compound.val[j];
 	}
@@ -64,11 +62,11 @@ namespace Preprocess {
 
 	double val;
 	try {
-	  val = stof(num) * CHEM_SCALE_FACTOR;
+	  val = stod(num) * CHEM_SCALE_FACTOR;
 	} catch(...) {
 	  throw ::std::runtime_error("Encode compounds error -- converting " + num + " to string");
 	}
-	encoded_compounds_ptr[comp_ctr * TOTAL_CHEMS + cm->get_idx(chemical)] = val;
+	encoded_compounds_ptr[comp_ctr * TOTAL_CHEMS + cm->get_idx(chemical)] += val;
       }
 
       comp_ctr++;
@@ -76,69 +74,87 @@ namespace Preprocess {
   
     return Matrix<double>(compound_strings.size(), TOTAL_CHEMS, ::std::move(encoded_compounds_ptr));
   }
-
-  // ---- Recursive function for finding all possible elemental combos with a total mass close to the m/z ----
-  void all_possible_el_recurse(::std::vector< ::std::vector<size_t> > &res,
-			       ::std::vector<double> &theoretical_compound_masses,
-			       const ::std::vector<double> &masses,
-			       ::std::vector<size_t> &temp,
-			       const ReagantIonMask &mask,
-			       double mass,
-			       double target_mass,
-			       size_t idx = 0) {
-    constexpr double pruning_tolerance = 1.5;
-    constexpr double ppm_tolerance = 50;
   
+  // ---- Recursive function for finding all possible elemental combos with a total mass close to the m/z ----
+  static void all_possible_el_recurse(::std::vector< ::std::vector<double> > &res,
+				      ::std::vector<double> &theoretical_compound_masses,
+				      const ::std::vector<double> &masses,
+				      ::std::vector<double> &temp,
+				      const ::std::vector<uint32_t> &ceilings,
+				      double mass,
+				      double target_mass,
+				      const double pruning_tol,
+				      const double ppm_tol,
+				      const ReagentIonMask &mask,
+				      size_t idx = 1) {
     double theoretical_mass = target_mass - mass;
 
-    if (::std::abs(Chem::get_ppm(target_mass, theoretical_mass)) <= ppm_tolerance) {    
+    uint32_t max_hydrogen = static_cast<uint32_t>(::std::round(mass / masses[0])); // max amount of hydrogen (masses[0]) allowed in remaining mass
+    if (max_hydrogen <= ceilings[0] && ::std::abs(get_ppm(target_mass, theoretical_mass + masses[CHARGE] + masses[0] * max_hydrogen)) <= ppm_tol) {
+      temp[CHARGE] += CHEM_SCALE_FACTOR;
+      temp[0] += CHEM_SCALE_FACTOR * max_hydrogen;
       res.push_back(temp);
-      theoretical_compound_masses.push_back(theoretical_mass);
-      return;
+      temp[0] -= CHEM_SCALE_FACTOR * max_hydrogen;
+      temp[CHARGE] -= CHEM_SCALE_FACTOR;
+      theoretical_compound_masses.push_back(theoretical_mass + masses[CHARGE] + masses[0] * max_hydrogen);
     }
   
-    for (int i = idx; i < mask.length; i++) {
-      if (mass - masses[mask.indeces[i]] <= -pruning_tolerance) {
+    for (size_t i = idx; i < mask.length; i++) {
+      auto chem_idx = mask.indeces[i];
+
+      if (::std::round(temp[chem_idx] / CHEM_SCALE_FACTOR) >= ceilings[chem_idx])
 	continue;
-      }
-    
-      temp.push_back(mask.indeces[i]);
+       
+      if (mass - masses[chem_idx] - masses[CHARGE] < -pruning_tol)
+	continue;
+
+      temp[chem_idx] += CHEM_SCALE_FACTOR;
       all_possible_el_recurse(res,
 			      theoretical_compound_masses,
 			      masses,
 			      temp,
-			      mask,
-			      mass - masses[mask.indeces[i]],
+			      ceilings,
+			      mass - masses[chem_idx],
 			      target_mass,
+			      pruning_tol,
+			      ppm_tol,
+			      mask,
 			      i);
-      temp.pop_back();
+      
+      temp[chem_idx] -= CHEM_SCALE_FACTOR;
     }
   }
 
   // ---- Find all possible elemental combos with a total mass close to the m/z ----
-  CompoundPermutations all_possible_elemental_combo(double mass, unenc_compound reagant_ion) {
+  CompoundPermutations all_possible_elemental_combo(double mass, unenc_compound reagent_ion) {
     auto *cm = ChemMap::get_chem_map();
     const auto &masses = cm->get_masses();
-    const auto &mask = cm->get_reagant_ion_mask(reagant_ion);
+    const auto &ceilings = cm->get_quantity_ceilings();
+    const auto &mask = cm->get_reagent_ion_mask(reagent_ion);
     
-    ::std::vector<size_t> temp;
+    ::std::vector<double> temp(TOTAL_CHEMS, 0);
     ::std::vector<double> theoretical_compound_masses;
-    ::std::vector< ::std::vector<size_t> > res;
+    ::std::vector< ::std::vector<double> > res;
 
+    static constexpr double ppm_tol = 35;
+    const double pruning_tol = (mass * ppm_tol) / (1e6 - ppm_tol);
+    
     all_possible_el_recurse(res,
 			    theoretical_compound_masses,
 			    masses,
 			    temp,
-			    mask,
+			    ceilings,
 			    mass,
-			    mass);
-  
-    auto encoded_compounds = ::std::make_unique<double[]>(TOTAL_CHEMS * res.size());
-  
-    for (int i{}; i < TOTAL_CHEMS; i++) {
-      for (int j = 0; j < res.size(); j++) {
-	encoded_compounds[j * TOTAL_CHEMS + i] = static_cast<double>(::std::count(res[j].begin(), res[j].end(), i))  * CHEM_SCALE_FACTOR;
-      }
+			    mass,
+			    pruning_tol,
+			    ppm_tol,
+			    mask);
+
+    auto encoded_compounds = ::std::make_unique<double[]>(res.size() * TOTAL_CHEMS);
+    auto ec_it = encoded_compounds.get();
+    for (auto &vec: res) {
+      ::std::copy(vec.begin(), vec.end(), ec_it);
+      ec_it += TOTAL_CHEMS;
     }
   
     return { Matrix<double>(res.size(), TOTAL_CHEMS, ::std::move(encoded_compounds)),
@@ -167,8 +183,9 @@ namespace Preprocess {
 	  }
 	
 	  compound_str += chems[idx];
-	  if (num_el_j > CHEM_SCALE_FACTOR) {
-	    compound_str += ::std::to_string((uint32_t) (num_el_j / CHEM_SCALE_FACTOR));
+	  auto n = static_cast<uint32_t>(::std::round(num_el_j / CHEM_SCALE_FACTOR));
+	  if (n > 1) {
+	    compound_str += ::std::to_string(n);
 	  }
 	}
       }
@@ -218,8 +235,8 @@ namespace Preprocess {
   }
 
   // ---- Prepare data for training and inference ----
-  MSData mz_to_data(double mz, unenc_compound ion, size_t n_features) {
-    auto apc = all_possible_elemental_combo(mz, ion);
+  MSData mz_to_data(double mz, unenc_compound reagent_ion, size_t n_features) {
+    auto apc = all_possible_elemental_combo(mz, reagent_ion);
   
     apc.compounds = Chem::factor_polyatomics(apc.compounds);
     auto *all_possible_compounds = &apc.compounds;
@@ -260,35 +277,56 @@ namespace Preprocess {
       throw ::std::runtime_error("Parse peak list error - opening file failed");
     }
 
-    constexpr uint8_t ion_col = 3, x0_col = 4;
+    constexpr uint8_t ion_col = 3, x0_col = 4, reagent_col = 28;
     ::std::vector<double> x0;
     ::std::vector<unenc_compound> assigned_formulas;
 
     ::std::string line;
-    getline(istream, line, '\n');
+    bool use_reagent = false;
+    {
+      int n_cols{};
+      ::std::string segment;
+      getline(istream, line, '\n');
+      ::std::stringstream ss(line);
+      
+      while (getline(ss, segment, '\t'))
+	n_cols++;
+      
+      use_reagent = n_cols == reagent_col + 1;
+    }
+    
     while (getline(istream, line, '\n')) {
       ::std::stringstream ss(line);
-      ::std::string segment;
+      ::std::string ion, x0_val, reagent{""};
       for (int i{}; i < ion_col; i++) {
-	getline(ss, segment, '\t');
+	getline(ss, ion, '\t');
       }
 
-      assigned_formulas.emplace_back(segment);
-      getline(ss, segment, '\t');
+      getline(ss, x0_val, '\t');
       try {
-	x0.push_back(stof(segment));
+	x0.push_back(stod(x0_val));
       } catch(...) {
-	throw ::std::runtime_error("Parse peak list error -- converting " + segment + " to double");
+	throw ::std::runtime_error("Parse peak list error -- converting " + x0_val + " to double");
       }
+
+      if (use_reagent)
+	while (getline(ss, reagent, '\t'));
+      
+      assigned_formulas.emplace_back(ion, reagent);
     }
 
     return { ::std::move(x0), ::std::move(assigned_formulas) };
   }
 
+  static inline void write_to_all_streams(::std::vector< ::std::reference_wrapper<::std::ostringstream> > &streams,
+				   ::std::string &&str) {
+    for (auto &stream: streams)
+      stream.get() << str;
+  }
+
   // ---- Prepare and output training/inference ready data for all peaks in a peak list to a file ----
   Bias PrepareDataset::create_combo_file(::std::string output_path,
 					 ::std::string unidentified_combos_path,
-					 ::Chem::unenc_compound reagant_ion,
 					 const PeakListData &peak_list_data,
 					 const Matrix<double> &encoded_unsimplified,
 					 const Matrix<double> &encoded_simplified,
@@ -301,11 +339,23 @@ namespace Preprocess {
 
     size_t total_assigned = assigned_formulas->size();
     size_t assigned_per_thread = (total_assigned + n_threads - 1) / n_threads;
+
+    auto *cm = ChemMap::get_chem_map();
+    const auto &reagent_ions = cm->get_reagent_ions();
+
+    ::std::unordered_map<::std::string, ::std::ofstream> reagent_file_streams;
+    reagent_file_streams.reserve(reagent_ions.size());
+
+    for (const auto &ion: reagent_ions) {
+      reagent_file_streams[ion.val] = ::std::ofstream(output_path + "_" + ion.val + ".csv");
+      if (!reagent_file_streams[ion.val].is_open())
+	throw ::std::runtime_error("Combo file creation error -- error opening " + ion.val + " output file");
+    }
     
     if (total_assigned < n_threads)
       n_threads = static_cast<int>(total_assigned);
     
-    ::std::ofstream ostream(output_path);
+    ::std::ofstream ostream(output_path + ".csv");
     
     if (!ostream.is_open()) {
       throw ::std::runtime_error("Combo file creation error -- error opening output file");
@@ -325,35 +375,53 @@ namespace Preprocess {
 
     ::std::mutex ostream_mtx;
 
-    auto *cm = ChemMap::get_chem_map();
-
     for (uint8_t thread_num{}; thread_num < n_threads; thread_num++) {
       workers.push_back(tp->submit< size_t >([&, thread_num] (arena_t *arena) {
 	size_t start = thread_num * assigned_per_thread;
 	size_t end = ::std::min(start + assigned_per_thread, total_assigned);
 
 	::std::ostringstream data("");
+	::std::unordered_map<::std::string, ::std::ostringstream> reagent_string_streams;
+
+	for (const auto &ion: reagent_ions)
+	  reagent_string_streams[ion.val] = ::std::ostringstream("");
+
 	::std::ostringstream unidentified("");
 
+	::std::vector< ::std::reference_wrapper<::std::ostringstream> > string_streams;
+	string_streams.reserve(2);
+	string_streams.push_back(::std::ref(data));
+
+	::std::vector< ::std::reference_wrapper<::std::ofstream> > file_streams;
+	string_streams.reserve(2);
+	file_streams.push_back(::std::ref(ostream));
+	
 	size_t total_samples{};
 	for (size_t i = start; i < end; i++) {
 	  auto encoded_unsimplified_assigned_formula_view = encoded_unsimplified.get_row_view(i);
 	  auto encoded_simplified_assigned_formula_view = encoded_simplified.get_row_view(i);
-
-	  ::Chem::unenc_compound ion = reagant_ion;
-	  
-	  // change everything to work with views
-	  if (reagant_ion.val.empty()) {
-	    ion = cm->find_reagant_ion(encoded_unsimplified_assigned_formula_view);
-	    if (ion.val.empty()) continue;
-	  }
 	
-	  auto apc = all_possible_elemental_combo(x0->at(i), ion);
+	  auto apc = all_possible_elemental_combo(x0->at(i), assigned_formulas->at(i).reagent_ion);
       
 	  auto all_possible_compounds_unsimplified = Chem::factor_polyatomics(apc.compounds);
 	  auto *all_possible_compounds_simplified = &apc.compounds;
 	  auto *theoretical_masses = &apc.masses;
-
+	  
+	  if (assigned_formulas->at(i).reagent_ion != "") {
+	    auto string_wrapper = ::std::ref(reagent_string_streams[assigned_formulas->at(i).reagent_ion]);
+	    auto file_wrapper = ::std::ref(reagent_file_streams[assigned_formulas->at(i).reagent_ion]);
+	    if (string_streams.size() == 2) {
+	      string_streams[1] = string_wrapper;
+	      file_streams[1] = file_wrapper;
+	    } else {
+	      string_streams.push_back(string_wrapper);
+	      file_streams.push_back(file_wrapper);
+	    }
+	  } else if (assigned_formulas->at(i).reagent_ion == "" && string_streams.size() == 2) {
+	    string_streams.pop_back();
+	    file_streams.pop_back();
+	  }
+	  
 	  bool is_found{ false };
       
 	  for (size_t j{}; j < all_possible_compounds_simplified->get_rows(); j++) {
@@ -368,16 +436,13 @@ namespace Preprocess {
 
 	    auto crit_check = Chem::check_criterea(permutation_unsimplified_view);
 	    auto *crit_mask = &crit_check.crit_mask;
-	    for (int k{}; k < N_CRITEREA; k++) {
-	      data << ::std::to_string((int) crit_mask->at(k)) + ",";
-	    }
+	    for (int k{}; k < N_CRITEREA; k++)
+	      write_to_all_streams(string_streams, ::std::to_string((int) crit_mask->at(k)) + ",");
       
-	    for (int k{}; k < TOTAL_CHEMS; k++) {
-	      data << ::std::to_string(permutation_unsimplified_view[k]) + ",";
-	    }
+	    for (int k{}; k < TOTAL_CHEMS; k++)
+	      write_to_all_streams(string_streams, ::std::to_string(permutation_unsimplified_view[k]) + ",");
 	    
-	    data << ::std::to_string(Chem::get_ppm(x0->at(i), theoretical_masses->at(j)))
-		 << "," + ::std::to_string(are_same) << ::std::endl;
+	    write_to_all_streams(string_streams, ::std::to_string(Chem::get_ppm(x0->at(i), theoretical_masses->at(j))) + "," + ::std::to_string(are_same) + '\n');
 	    
 	    total_samples++;
 
@@ -387,7 +452,15 @@ namespace Preprocess {
 		::std::lock_guard<::std::mutex> lg(ostream_mtx);
 		ostream << data.str();
 		not_found_ostream << unidentified.str();
+		for (const auto &ion: reagent_ions)
+		  reagent_file_streams[ion.val] << reagent_string_streams[ion.val].str();
 	      }
+
+	      for (auto &p: reagent_string_streams) {
+		p.second.str("");
+		p.second.clear();
+	      }
+		
 	  
 	      data.str("");
 	      data.clear();
@@ -407,8 +480,16 @@ namespace Preprocess {
 	  ::std::lock_guard<::std::mutex> lg(ostream_mtx);
 	  ostream << data.str();
 	  not_found_ostream << unidentified.str();
+	  for (const auto &ion: reagent_ions)
+	    reagent_file_streams[ion.val] << reagent_string_streams[ion.val].str();
 	}
-	
+
+	for (auto &p: reagent_string_streams) {
+	  p.second.str("");
+	  p.second.clear();
+	}
+		
+	  
 	data.str("");
 	data.clear();
 	unidentified.str("");
@@ -589,12 +670,12 @@ namespace Preprocess {
       throw ::std::runtime_error("Peak list train/test split error -- Could not open peak list");
     }
 
-    ::std::ofstream train_out(output_path + "_train.txt");
+    ::std::ofstream train_out(output_path + "train.txt");
     if (!train_out.is_open()) {
       throw ::std::runtime_error("Peak list train/test split error -- Could not open train output list");
     }
 
-    ::std::ofstream test_out(output_path + "_test.txt");
+    ::std::ofstream test_out(output_path + "test.txt");
     if (!test_out.is_open()) {
       throw ::std::runtime_error("Peak list train/test split error -- Could not open test output list");
     }
@@ -602,7 +683,8 @@ namespace Preprocess {
     ::std::vector<::std::string> lines;
     ::std::string line, headers;
     getline(istream, headers, '\n');
-    
+    train_out << headers << ::std::endl;
+    test_out << headers << ::std::endl;
     
     while (getline(istream, line, '\n')) {
       lines.push_back(line);
@@ -610,12 +692,14 @@ namespace Preprocess {
 
     auto &rng = ::CNum::Utils::Rand::RandomGenerator::instance();
     ::std::shuffle(lines.begin(), lines.end(), rng);
+
+    size_t split_point = lines.size() * (1 - test_percentage);
     
-    for (size_t i{}; i < lines.size() * (1 - test_percentage); i++) {
+    for (size_t i{}; i < split_point; i++) {
       train_out << lines[i] << ::std::endl;
     }
 
-    for (size_t i = lines.size() * (1 - test_percentage); i < lines.size(); i++) {
+    for (size_t i = split_point; i < lines.size(); i++) {
       test_out << lines[i] << ::std::endl;
     }
 
@@ -626,30 +710,30 @@ namespace Preprocess {
 
   // switch masks to spans, create individual decode and encode funcs
   
-  void PrepareDataset::split_by_reagant_ion(::std::string peak_list_path, ::std::string output_path) {
+  void PrepareDataset::split_by_reagent_ion(::std::string peak_list_path, ::std::string output_path) {
     auto *cm = ChemMap::get_chem_map();
-    const auto &reagant_ions = cm->get_reagant_ions();
+    const auto &reagent_ions = cm->get_reagent_ions();
     ::std::unordered_map<::std::string, ::std::ofstream> outputs;
 
-    for (auto &ion: reagant_ions) {
+    for (auto &ion: reagent_ions) {
       auto path = output_path + ion.val + ".txt";
       outputs[ion.val] = ::std::ofstream(path);
 
       if (!outputs[ion.val].is_open()) {
-	throw ::std::runtime_error("Split by reagant ion error -- couldn't open " + ion.val + " output file");
+	throw ::std::runtime_error("Split by reagent ion error -- couldn't open " + ion.val + " output file");
       }
     }
 
     ::std::ifstream is(peak_list_path);
     if (!is.is_open()) {
-      throw ::std::runtime_error("Split by reagant ion error -- couldn't open input file");
+      throw ::std::runtime_error("Split by reagent ion error -- couldn't open input file");
     }
 
     constexpr uint8_t ion_col = 3;
     
     ::std::string line;
     getline(is, line, '\n');
-    for (auto &ion: reagant_ions)
+    for (auto &ion: reagent_ions)
       outputs[ion.val] << line << ::std::endl;
     
     while (getline(is, line, '\n')) {
@@ -663,9 +747,12 @@ namespace Preprocess {
       auto ec = ::Preprocess::simplify_compounds(::Preprocess::encode_compounds(dc));
       auto ec_view = ec.get_row_view(0);
 
-      auto ion = cm->find_reagant_ion(ec_view);
+      auto ion = cm->find_reagent_ion(ec_view);
       if (ion.val.empty())
 	continue;
+
+      if (ion.val == "NH4")
+	outputs["NO"] << line << ::std::endl;
 
       outputs[ion.val] << line << ::std::endl;
     }
@@ -698,6 +785,7 @@ namespace Preprocess {
 	if (used_indeces.contains(rand)) continue;
 
 	pos_ptr[n] = rand;
+	used_indeces.insert(rand);
 	n++;
       }
     };

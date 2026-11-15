@@ -11,8 +11,8 @@ using namespace CNum::Model::Tree;
 using namespace CNum::Utils::ModelUtils;
 
 int main(int argc, char *argv[]) {
-  if (argc != 3) {
-    throw ::std::invalid_argument("Invalid arguments. Usage: inference <path to yaml config> [NH4|NO]");
+  if (argc != 2) {
+    throw ::std::invalid_argument("Invalid arguments. Usage: inference <path to yaml config>");
   }
 
   auto config = ::YAML::LoadFile(argv[1]);
@@ -20,13 +20,38 @@ int main(int argc, char *argv[]) {
   auto model_output_dir = run_dir + config["paths"]["core"]["model_output_dir"].as<::std::string>();
   
   double mz{ 0.0 };
-  auto xgboost = GBModel<XGTreeBooster>::load_model(model_output_dir + ::std::string(argv[2]) + "_xgboost.cmod");
+  ::std::string mz_string;
+  auto xgboost = GBModel<XGTreeBooster>::load_model(model_output_dir + "xgboost.cmod");
+
+  ::Chem::unenc_compound reagent("");
+
+  do {
+    ::std::cout << "Enter a centroid m/z value: ";
+    if (!getline(::std::cin, mz_string))
+      exit(1);
+
+    try {
+      mz = ::std::stod(mz_string);
+    } catch(::std::invalid_argument e) {
+      ::std::cout << "Invalid centroid value." << ::std::endl;
+      continue;
+    }
+
+    break;
+  } while (true);
   
-  ::std::cin >> mz;
-  
-  auto data = Preprocess::mz_to_data(mz, { argv[2] });
-  data.model_data.print_matrix();
-  
+  do {
+    ::std::cout << "Enter a reagent ion (NH4, NO, H3O, or leave blank): ";
+    if (!getline(::std::cin, reagent.val))
+      exit(1);
+    
+    if (::Chem::ChemMap::get_chem_map()->reagent_supported(reagent))
+      break;
+
+    ::std::cout << "Invalid reagent ion. Input must be NH4, NO, H3O, or leave blank." << ::std::endl;
+  } while (true);
+      
+  auto data = Preprocess::mz_to_data(mz, reagent);
   
   data.encoded_compounds = Preprocess::simplify_compounds(data.encoded_compounds);
   auto preds = xgboost.predict(data.model_data);

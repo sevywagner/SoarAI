@@ -1,7 +1,7 @@
 project:
   name: "SoarAI"
-  version: "1.0.0"
-  description: "Paper artifact config (CNum GB models are primary; python models are just for reproducing model search results)"
+  version: "1.1.0"
+  description: "Paper artifact config (CNum GB models are primary; neural network is just for reproducing model search results)"
 
 run:
   run_id: "test_results"
@@ -27,10 +27,8 @@ paths:
 
     pred_logit_output_dir: "logits/" # Directory to which raw prediction values are output
 
-    data_combo_NO_train: "NO_train.csv" # Path to NO train combo file
-    data_combo_NH4_train: "NH4_train.csv" # Path to NH4 train combo file
-    data_combo_NO_test: "NO_test.csv" # Path to NO test combo file
-    data_combo_NH4_test: "NH4_test.csv" # Path to NH4 test combo file
+    data_combo_train: "train" # Path to NO train combo file
+    data_combo_test: "test" # Path to NO test combo file
 
     venv:
       analysis_dir: ../analysis/ # analysis venv directory (for analyzing model predictions)
@@ -39,17 +37,9 @@ paths:
 core:
   model_hyperparams:
     xgboost:
-      NH4_reagent:
-        n_learners: 100
-        learning_rate: 0.1
-        subsample: 1.0
-      NO_reagent:
-        n_learners: 100
-        learning_rate: 0.1
-        subsample: 1.0
+      n_learners: 100
+      learning_rate: 0.1
+      subsample: 1.0
 
     nn:
-      NH4_reagent:
-        epochs: 20
-      NO_reagent:
-        epochs: 20
+      epochs: 20
